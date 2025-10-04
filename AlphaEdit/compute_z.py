@@ -7,6 +7,7 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 from rome import repr_tools
 from util import nethook
 
+from .kfac import KFAC
 from .AlphaEdit_hparams import AlphaEditHyperParams
 
 
@@ -111,11 +112,12 @@ def compute_z(
 
     # Optimizer
     opt = torch.optim.Adam([delta], lr=hparams.v_lr)
+    preconditioner = KFAC([delta], 0.1, update_freq=10)
     nethook.set_requires_grad(False, model)
 
     # Execute optimization
     for it in range(hparams.v_num_grad_steps):
-        opt.zero_grad()
+        opt.zero_grad(set_to_none=True)
 
         # Forward propagation
         with nethook.TraceDict(
@@ -180,6 +182,7 @@ def compute_z(
 
         # Backpropagate
         loss.backward()
+        preconditioner.step()
         opt.step()
 
         # Project within L2 ball
